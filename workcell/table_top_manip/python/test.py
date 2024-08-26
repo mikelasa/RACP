@@ -1,4 +1,4 @@
-import manip_server_pybind as hs
+import manip_server_pybind as ms
 import numpy as np
 from time import sleep
 import cv2
@@ -7,8 +7,10 @@ import matplotlib.pyplot as plt
 
 print("[python] creating manip server")
 
-server = hs.ManipServer(
-    "/home/yifanhou/git/RobotTestBench/applications/ur_test_bench/config/ur_test_bench.yaml"
+server = ms.ManipServer()
+server.initialize(
+    "/home/yifanhou/git/RobotTestBench/applications/ur_test_bench/config/ur_1.yaml"
+    # "/home/yifanhou/git/RobotTestBench/applications/ur_test_bench/config/ur_test_bench.yaml"
 )
 
 print("[python] server created")
@@ -21,7 +23,6 @@ pose_fb = server.get_pose(1)
 print("[python] pose_fb:", pose_fb)
 
 # server.set_high_level_maintain_position()
-
 # bgr = np.zeros((1080, 1080, 3), dtype=np.uint8)
 # cv2.namedWindow("image")
 
@@ -59,7 +60,9 @@ for i in range(2):
     for j in range(5):
         pose_cmds[:, j] = pose_fb.reshape((7,))
         pose_cmds[0, j] += deltas[i] * j
-    timepoints_ms = np.array([0.0, 100, 200, 300, 400]) + server.get_timestamp_now_ms()
+    timepoints_ms = (
+        np.array([0.0, 400, 800, 1200, 1600]) + server.get_timestamp_now_ms()
+    )
     server.schedule_waypoints(pose_cmds, timepoints_ms)
     pose_fb = server.get_pose(1)
     log_pose_x.append(pose_fb[0])
@@ -70,7 +73,7 @@ for i in range(2):
     log_pose_cmd_y.append(pose_cmd[1])
     log_pose_cmd_z.append(pose_cmd[2])
 
-    sleep(0.2)
+    sleep(5)
 
 sleep(0.5)
 server.join_threads()
