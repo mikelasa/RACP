@@ -11,9 +11,16 @@ int main() {
     config.robot_ip = "172.17.6.164";
     config.log_size = 50;
     config.tcp_mass = 0.0;
-    config.tcp_inertia = 0.01;
+    config.fx_c_load = {0.0, 0.0, 0.0}; // default origin
+    config.tcp_inertia = {0.0, 0.0, 0.0,
+                          0.0, 0.0, 0.0,
+                          0.0, 0.0, 0.0}; // default inertia
     config.deviation = {10.0, 3.12, 2 * M_PI}; // default deviation
-    config.kDeltaT = 1e-6; // Time step for filtering
+    config.kDeltaT = 1e-3; // Time step for filtering
+    config.realtime_config = "ignore";
+    config.controller_mode = "cartesian_impedance";
+    config.motion_generator_mode = "cartesian_position";    
+
     // set safety and operation modes for the robot
     config.robot_interface_config.zone_safety_mode =
         RobotSafetyMode::SAFETY_MODE_TRUNCATE;
@@ -40,25 +47,24 @@ int main() {
     FRANKA franka_robot(config);
 
     //set impedance to robot
-    franka_robot.setJointImpedance({{3000, 3000, 3000, 2500, 2500, 2000, 2000}});
-    franka_robot.setCartesianImpedance({{3000, 3000, 3000, 300, 300, 300}});
+    franka_robot.setJointImpedance(config.setJointImpedance);
+    franka_robot.setCartesianImpedance(config.setCartesianImpedance);
     franka_robot.setCollisionBehavior(
-    {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}}, {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-    {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}}, {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
-    {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}}, {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
-    {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}}, {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});
+                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}}, {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
+                {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}}, {{20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0}},
+                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}}, {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}},
+                {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}}, {{20.0, 20.0, 20.0, 25.0, 25.0, 25.0}});
 
     //set load to robot
-    franka_robot.setLoad(config.tcp_mass, {0.0, 0.0, 0.1},
-                        {0.0, 0.0, 0.0,
-                        0.0, 0.0, 0.0,
-                        0.0, 0.0, 0.0});
+    franka_robot.setLoad(config.tcp_mass, config.fx_c_load, config.tcp_inertia);
 
-    // Start the motion with Joint Impedance control and Joint Position motion generator
-    franka_robot.startCartesianMotion(
+    //start motion with the configured modes
+    franka_robot.startMotion(
         research_interface::robot::Move::ControllerMode::kCartesianImpedance,
-        research_interface::robot::Move::MotionGeneratorMode::kCartesianPosition
-    );
+        research_interface::robot::Move::MotionGeneratorMode::kCartesianPosition,
+        {config.deviation[0], config.deviation[1], config.deviation[2]},
+        {config.deviation[0], config.deviation[1], config.deviation[2]}
+    );  
 
     // Get the initial Cartesian pose of the robot
     RUT::Vector7d pose0;
@@ -75,7 +81,7 @@ int main() {
     RUT::Timer timer;
 
     RUT::Vector3d target_position(0.430179, 0.0, 0.520758); // desired target
-    double trajectory_duration = 20; // seconds
+    double trajectory_duration = 10; // seconds
 
     // Precompute trajectory points, time steps 1e-3 (1kHz)
     int traj_steps = static_cast<int>(trajectory_duration * 1000);
