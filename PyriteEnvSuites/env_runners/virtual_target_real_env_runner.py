@@ -43,16 +43,16 @@ control_log_folder_path = os.environ.get("PYRITE_CONTROL_LOG_FOLDERS")
 def main():
     control_para = {
         "raw_time_step_s": 0.001,  # dt of raw data collection. Used to compute time step from time_s such that the downsampling according to shape_meta works.
-        "slow_down_factor": 1.5,  # 3 for flipup, 1.5 for wiping
+        "slow_down_factor": 500,  # 3 for flipup, 1.5 for wiping
         "sparse_execution_horizon": 12,  # 12 for flipup, 8/24 for wiping
         "max_duration_s": 3500,
-        "pausing_mode": False,
-        "device": "cpu",
+        "pausing_mode": True,
+        "device": "cuda",
     }
     pipeline_para = {
         "save_low_dim_every_N_frame": 1,
         "save_visual_every_N_frame": 1,
-        "ckpt_path": "/2025.10.27_13.07.28_flip_up_new_resnet_230/checkpoints/latest.ckpt",
+        "ckpt_path": "/2025.11.04_10.05.05_Wipe_single_arm_Wipe_single_arm/checkpoints/latest.ckpt",
         # "hardware_config_path": hardware_config_folder_path + "/manip_server_config_left_arm.yaml",
         "hardware_config_path": hardware_config_folder_path
         + "/single_arm_data_collection_franka.yaml",
@@ -211,19 +211,20 @@ def main():
     printOrNot(vbs_h2, "Starting main loop.")
 
     if control_para["pausing_mode"]:
-        plt.ion()  # to run GUI event loop
-        fig = plt.figure()
-        ax = plt.axes(projection="3d")
-        x = np.linspace(-0.02, 0.2, 20)
-        y = np.linspace(-0.1, 0.1, 20)
-        z = np.linspace(-0.1, 0.1, 20)
-        ax.plot3D(x, y, z, color="blue", marker="o", markersize=3)
-        ax.plot3D(x, y, z, color="red", marker="o", markersize=3)
-        ax.set_title("Target and virtual target")
+        plt.ion()  # Enable interactive mode
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Don't plot dummy data or call plt.show() here
+        # Just set up the axes
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
-        plt.show()
+        ax.set_title("Trajectory Visualization")
+        
+        # Show non-blocking
+        plt.show(block=False)
+        plt.pause(0.001)
 
     # log
     log_store = zarr.DirectoryStore(path=pipeline_para["control_log_path"])
@@ -380,6 +381,7 @@ def main():
                         color="red",
                         marker="o",
                         markersize=3,
+                        label="Target (all)"
                     )
 
                     ax.plot3D(
@@ -389,6 +391,7 @@ def main():
                         color="blue",
                         marker="o",
                         markersize=3,
+                        label="Virtual Target (all)"
                     )
 
                     ax.plot3D(
@@ -405,6 +408,7 @@ def main():
                         linewidth=3,
                         marker="o",
                         markersize=4,
+                        label="Target (exec horizon)"
                     )
 
                     ax.plot3D(
@@ -421,6 +425,7 @@ def main():
                         linewidth=3,
                         marker="o",
                         markersize=4,
+                        label="VT (exec horizon)"
                     )
 
                     ax.plot3D(
@@ -430,16 +435,22 @@ def main():
                         color="black",
                         marker="o",
                         markersize=8,
+                        label="Current pose"
                     )
 
                 ax.set_xlabel("X")
                 ax.set_ylabel("Y")
                 ax.set_zlabel("Z")
+                ax.set_title(f"Horizon {horizon_count}")
+                ax.legend()
 
                 set_axes_equal(ax)
 
-                plt.draw()
-
+                # Force the figure to update and display
+                fig.canvas.draw_idle()
+                fig.canvas.flush_events()
+                plt.pause(0.1)  # Give time for rendering
+                
                 input("Press Enter to start executing the plotted actions.")
 
                 # log the whole action
