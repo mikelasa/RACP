@@ -5,7 +5,7 @@ defaults:
   # - task: smiley_single_arm.yaml
   - override hydra/sweeper: optuna
 
-name: ${policy.obs_encoder.fuse_mode}_${policy.obs_encoder.vision_encoder_cfg.feature_aggregation}
+name: ${policy.obs_encoder.fuse_mode}_${policy.obs_encoder.vision_encoder_cfg.feature_aggregation}_bi_cross_script
 output_dir: ${oc.env:PYRITE_CHECKPOINT_FOLDERS}
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
 
@@ -34,7 +34,7 @@ policy:
   obs_encoder:
     _target_: diffusion_policy.model.vision.timm_obs_encoder_bi_cross.TimmObsEncoderWithForceV2
     shape_meta: ${shape_meta}
-    fuse_mode: bi-cross-attention #modality-attention | bi-cross-attention
+    fuse_mode: modality-attention #modality-attention | bi-cross-attention
     
     bi_cross_heads: 4               # heads in both CrossAttention modules
     use_relational_features: false  # enable DAT (only with feature_aggregation: all_tokens)
@@ -101,17 +101,17 @@ ema:
 
 dataloader:
   batch_size: 128
-  num_workers: 24
+  num_workers: 32
   shuffle: True
   pin_memory: True
-  persistent_workers: True
+  persistent_workers: false
 
 val_dataloader:
   batch_size: 128
-  num_workers: 24
+  num_workers: 32
   shuffle: False
   pin_memory: True
-  persistent_workers: True
+  persistent_workers: false
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -128,7 +128,7 @@ training:
   # optimization
   lr_scheduler: cosine
   lr_warmup_steps: 1000
-  num_epochs: 200 #200                                #EPOCS
+  num_epochs: 300 #200                                #EPOCS
   
   log_gradient_norm: False
 
@@ -185,8 +185,8 @@ hydra:
       seed: 42
 
     params:
-      policy.obs_encoder.fuse_mode: choice(modality-attention,bi-cross-attention)
-      policy.obs_encoder.vision_encoder_cfg.feature_aggregation: choice(cls,all_tokens)
+      #policy.obs_encoder.fuse_mode: choice(modality-attention,bi-cross-attention)
+      #policy.obs_encoder.vision_encoder_cfg.feature_aggregation: choice(cls,all_tokens)
       
   job:
     override_dirname: ${name}
