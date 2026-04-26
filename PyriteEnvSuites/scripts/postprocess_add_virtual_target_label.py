@@ -26,7 +26,7 @@ if "PYRITE_DATASET_FOLDERS" not in os.environ:
 dataset_folder_path = os.environ.get("PYRITE_DATASET_FOLDERS")
 
 # Config for flip up (single robot)
-dataset_path = dataset_folder_path + "/wipe_profile_curved_190"
+dataset_path = dataset_folder_path + "/flip_up_230_500"
 id_list = [0]
 
 # # Config for vase wiping (bimanual)
@@ -36,19 +36,20 @@ id_list = [0]
 wrench_moving_average_window_size = 1000  # should be around 1s of data
 buffer = zarr.open(dataset_path, mode="r+")
 
-num_of_process = 32
-flag_plot = False
+num_of_process = 1
+flag_plot = True
 fin_every_n = 50
 
 # struct that defines the parameters to simulate the penetration with a given stiffness
+# stiffness range 200-4000, high limit still pending for real tests results.
 stiffness_estimation_para = {
     # penetration estimator
-    "k_max": 4000,  # 1cm 50N maximum stiffness
-    "k_min": 2000,  # 1cm 2.5N minimum stiffness
+    "k_max": 2000,  # 1cm 50N maximum stiffness
+    "k_min": 500,  # 1cm 2.5N minimum stiffness
     "f_low": 7.5, #lower bound of the force
-    "f_high": 10,  #upper bound of the force
+    "f_high": 30,  #upper bound of the force
     "dim": 3, #3 or 6, 3 for translational, 6 for full 6D
-    "characteristic_length": 0.1, #the characteristic length for rotational stiffness
+    "characteristic_length": 1, #the characteristic length for rotational stiffness
     "vel_tol": 999.002,  # (not using) vel larger than this will trigger stiffness adjustment
 }
 

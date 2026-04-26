@@ -5,7 +5,7 @@ defaults:
   # - task: smiley_single_arm.yaml
   - override hydra/sweeper: optuna
 
-name: ${policy.obs_encoder.fuse_mode}_${policy.obs_encoder.vision_encoder_cfg.feature_aggregation}_bi_cross_script
+name: ${policy.obs_encoder.fuse_mode}_${policy.obs_encoder.vision_encoder_cfg.feature_aggregation}_original
 output_dir: ${oc.env:PYRITE_CHECKPOINT_FOLDERS}
 _target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
 
@@ -32,7 +32,7 @@ policy:
     prediction_type: epsilon # or sample
 
   obs_encoder:
-    _target_: diffusion_policy.model.vision.timm_obs_encoder_bi_cross.TimmObsEncoderWithForceV2
+    _target_: diffusion_policy.model.vision.timm_obs_encoder_with_force.TimmObsEncoderWithForce
     shape_meta: ${shape_meta}
     fuse_mode: modality-attention #modality-attention | bi-cross-attention
     
