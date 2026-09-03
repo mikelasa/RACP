@@ -426,6 +426,23 @@ class TimmObsEncoderWithForceV1(ModuleAttrMixin):
             fused  = torch.cat([img_enhanced, force_enhanced], dim=1)  # (B, total_tokens, D)
             result = self.attn_pool(fused)                              # (B, D)
 
+            # attention visualization (inference only; no-op when disabled)
+            if hasattr(self.attn_pool, "last_attn_weights"):
+                cross_img_w   = getattr(self.img_cross_attention,   "last_attn_weights", None)
+                cross_force_w = getattr(self.force_cross_attention, "last_attn_weights", None)
+                self._dump_bidat_attention(
+                    self.attn_pool.last_attn_weights,
+                    cross_img_w,
+                    cross_force_w,
+                    n_img=rgb_tokens.shape[1],
+                    n_force=force_tokens.shape[1],
+                )
+                del self.attn_pool.last_attn_weights
+                if cross_img_w is not None:
+                    del self.img_cross_attention.last_attn_weights
+                if cross_force_w is not None:
+                    del self.force_cross_attention.last_attn_weights
+
         elif self.fuse_mode == "bi-cross-attention-DAT":
             force_tokens = torch.cat(force_features, dim=1)          # (B, n_wrench, D)
 
@@ -440,16 +457,20 @@ class TimmObsEncoderWithForceV1(ModuleAttrMixin):
 
             # attention visualization (inference only; no-op when disabled)
             if hasattr(self.attn_pool, "last_attn_weights"):
-                cross_w = getattr(self.img_cross_attention, "last_attn_weights", None)
+                cross_img_w   = getattr(self.img_cross_attention,   "last_attn_weights", None)
+                cross_force_w = getattr(self.force_cross_attention, "last_attn_weights", None)
                 self._dump_bidat_attention(
                     self.attn_pool.last_attn_weights,
-                    cross_w,
+                    cross_img_w,
+                    cross_force_w,
                     n_img=rgb_tokens.shape[1],
                     n_force=force_tokens.shape[1],
                 )
                 del self.attn_pool.last_attn_weights
-                if cross_w is not None:
+                if cross_img_w is not None:
                     del self.img_cross_attention.last_attn_weights
+                if cross_force_w is not None:
+                    del self.force_cross_attention.last_attn_weights
 
         elif self.fuse_mode == "DAT":
             force_tokens = torch.cat(force_features, dim=1)          # (B, n_wrench, D)
@@ -459,6 +480,17 @@ class TimmObsEncoderWithForceV1(ModuleAttrMixin):
                 symbols = self.symbol_retriever_module(fused)      # (B, total_tokens, symbol_dim)
                 fused   = layer(fused, symbols)                    # (B, total_tokens, D)
             result = self.attn_pool(fused)                         # (B, D)
+
+            # attention visualization (inference only; no-op when disabled)
+            if hasattr(self.attn_pool, "last_attn_weights"):
+                self._dump_bidat_attention(
+                    self.attn_pool.last_attn_weights,
+                    None,  # no cross-attention in DAT mode
+                    None,
+                    n_img=rgb_tokens.shape[1],
+                    n_force=force_tokens.shape[1],
+                )
+                del self.attn_pool.last_attn_weights
 
         if low_dim_features:
             result = torch.cat([result, torch.cat(low_dim_features, dim=-1)], dim=-1)
@@ -491,14 +523,16 @@ class TimmObsEncoderWithForceV1(ModuleAttrMixin):
             pickle.dump(attn_dict, f)
         self._attn_viz_count += 1
 
-    def _dump_bidat_attention(self, pool_weights, cross_weights, n_img, n_force):
+    def _dump_bidat_attention(self, pool_weights, cross_img_weights, cross_force_weights, n_img, n_force):
         """Pickle one attention snapshot per call for bi-cross-attention-DAT.
 
-        pool_weights:  (B, 1, n_img+n_force+1) — attn-pool query over all tokens.
-                       Index 0 is the prepended mean token; image tokens follow,
-                       then force tokens: [mean, img_0..img_{n-1}, force_0..force_{m-1}]
-        cross_weights: (B, n_img, n_force) — img←force cross-attention, averaged over heads.
-                       None if capture was off for that module.
+        pool_weights:        (B, 1, n_img+n_force+1) — attn-pool query over all tokens.
+                             Index 0 is the prepended mean token; image tokens follow,
+                             then force tokens: [mean, img_0..img_{n-1}, force_0..force_{m-1}]
+        cross_img_weights:   (B, n_img, n_force) — img←force cross-attention, avg over heads.
+                             None if capture was off for that module.
+        cross_force_weights: (B, n_force, n_img) — force←img cross-attention, avg over heads.
+                             None if capture was off for that module.
         """
         import os
         import pickle
@@ -513,12 +547,17 @@ class TimmObsEncoderWithForceV1(ModuleAttrMixin):
             "pool_per_token": W_pool,       # full pool weight vector for detailed plots
             "n_img":          int(n_img),
             "n_force":        int(n_force),
-            "mode":           "bi-cross-attention-DAT",
+            "mode":           self.fuse_mode,
         }
-        if cross_weights is not None:
-            # average over image queries → (n_force,): which force timesteps matter most
+        if cross_img_weights is not None:
+            # average over image queries → (n_force,): which force timesteps img patches use
             attn_dict["cross_per_force_step"] = (
-                cross_weights[0].float().cpu().numpy().mean(axis=0)
+                cross_img_weights[0].float().cpu().numpy().mean(axis=0)
+            )
+        if cross_force_weights is not None:
+            # average over force queries → (n_img,): which image patches force tokens use
+            attn_dict["cross_per_img_token"] = (
+                cross_force_weights[0].float().cpu().numpy().mean(axis=0)
             )
 
         if not hasattr(self, "_attn_viz_count"):
