@@ -4,9 +4,7 @@ Tested on Ubuntu 24.04 with an RTX 5080 (CUDA 12.8).
 
 ## Layout
 
-The paths below assume the workspace is at `~/RACP`. The code itself only relies on the
-folder layout: `hardware_interfaces` finds `libfranka-0.9.2` next to it, and the Python code
-imports `hardware_interfaces` from the folder next to `racp`.
+The following table shows how the framework parts are distributed.
 
 | Folder | What it is | Source |
 |---|---|---|
@@ -28,8 +26,6 @@ All C++ libraries are installed to `~/.local`, so `sudo` is only needed for `apt
 ```sh
 git clone --recursive https://github.com/mikelasa/RACP.git ~/RACP
 ```
-
-If you cloned without `--recursive`, run `git submodule update --init --recursive` inside `~/RACP`.
 
 ## 2. System packages and `~/.local`
 
@@ -89,9 +85,10 @@ mkdir -p $CONDA_PREFIX/etc/conda/activate.d
 echo 'export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/:$LD_LIBRARY_PATH' > $CONDA_PREFIX/etc/conda/activate.d/linker.sh
 ```
 
-## 4. C++ dependencies
-
-Keep `pyrite` activated for every build below. Each block starts from `~/RACP`.
+## 4. Activate env
+```
+mamba activate pyrite
+```
 
 ### yaml-cpp (must be C++17)
 
@@ -120,7 +117,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/.local -DCMAKE_CXX_FLAGS="-I$HOME/.local/i
 make -j && make install
 ```
 
-### ur_rtde
+### ur_rtde (if UR robot is used only)
 
 ```sh
 cd ~/RACP/ur_rtde && mkdir -p build && cd build
@@ -180,9 +177,6 @@ make -j && make install
 
 ## 5. hardware_interfaces
 
-The fixes needed on top of the original code are already applied (`TaskSpaceInterpolationController`
-in `manip_server_loops.cc`, libfranka 0.9.2 include paths in the CMake files).
-
 ```sh
 cd ~/RACP/hardware_interfaces && mkdir -p build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/.local \
@@ -194,16 +188,14 @@ make -j && make install
 ```
 
 This produces:
-- `build/applications/manipulation_data_collection/main_teleop`: SpaceMouse teleoperation and data collection.
-- `workcell/table_top_manip/python/manip_server_pybind*.so`: the Python binding used by inference.
+- `build/applications/manipulation_data_collection/main_teleop`: Teleoperation and data collection interface.
+- `workcell/table_top_manip/python/manip_server_pybind*.so`: the Python binding used by inference to connect C++ and python.
 
 Robot configs live in `workcell/table_top_manip/config/`:
 - `single_arm_data_collection_franka.yaml`: teleop and ACP/RACP inference.
 - `single_arm_DP_franka.yaml`: DP inference.
 
 ## 6. Workflow
-
-Activate `pyrite` first. Python commands run from `~/RACP/racp` unless noted.
 
 1. **Collect data**
    ```sh
@@ -222,6 +214,7 @@ Activate `pyrite` first. Python commands run from `~/RACP/racp` unless noted.
    cd PyriteML
    HYDRA_FULL_ERROR=1 accelerate launch train.py --config-name=train_ACP.yaml
    # or train_RACP.yaml, train_RACP_dual_camera.yaml, train_DP.yaml
+   # for multirun session using hydra sweeped you can add --multirun argument
    ```
 5. **Run on the robot**
    ```sh
@@ -231,9 +224,7 @@ Activate `pyrite` first. Python commands run from `~/RACP/racp` unless noted.
 
 See `racp/README.md` for more on the method, data format and training options.
 
-When you change C++ code in `hardware_interfaces` or `controllers`, run `make install` again
-(`sudo make install` if the files in `~/.local` are owned by root): at runtime the libraries are
-loaded from `~/.local/lib`, which `LD_LIBRARY_PATH` puts ahead of `build/`.
+When you change C++ code in `hardware_interfaces` or `controllers`, run `sudo make install` again
 
 ## Credits
 
