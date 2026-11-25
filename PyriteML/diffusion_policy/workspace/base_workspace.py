@@ -1,4 +1,3 @@
-# filepath: /home/robotlab/ACP/adaptive_compliance_policy/PyriteML/diffusion_policy/workspace/base_workspace.py
 from typing import Optional
 import os
 import pathlib
