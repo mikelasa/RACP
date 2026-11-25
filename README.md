@@ -1,9 +1,5 @@
 # RACP
 
-Setup guide for the full Adaptive Compliance Policy stack on the Franka workstation:
-Python training/inference (`racp`) plus the C++ robot side
-(`hardware_interfaces`, `controllers` and their dependencies).
-
 Tested on Ubuntu 24.04 with an RTX 5080 (CUDA 12.8).
 
 ## Layout
