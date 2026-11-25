@@ -216,15 +216,74 @@ Robot configs live in `workcell/table_top_manip/config/`:
    # or train_RACP.yaml, train_RACP_dual_camera.yaml, train_DP.yaml
    # for multirun session using hydra sweeped you can add --multirun argument
    ```
+   > **Warning:** check `VISUALIZE_ATTENTION` in
+   > `racp/PyriteML/diffusion_policy/model/vision/utils/attention_viz.py` before training RACP.
+   > If it is `True`, the observation encoder and the action transformer compute and keep their
+   > attention weights (forcing PyTorch's slower attention path), and every validation sampling
+   > step writes an `attn_weights_<n>.pkl` file to `racp/PyriteML/attn_viz/`. Training slows
+   > down and that folder fills up. Set it to `False` for training and turn it on only for
+   > inference when you want to plot attention (step 6).
 5. **Run on the robot**
    ```sh
    python PyriteEnvSuites/env_runners/inference_ACP_RACP.py --ckpt <checkpoint>
    python PyriteEnvSuites/env_runners/inference_DP.py --ckpt <checkpoint>
    ```
+6. **Results**
+
+   **Trained models.** Each training run creates a folder in `$PYRITE_CHECKPOINT_FOLDERS`
+   (`~/training_outputs`) named `<date>_<time>_<task>_<name>` (`..._multirun/<n>_...` for sweeps):
+   - `checkpoints/`: the best `epoch=XXXX-train_loss=X.XXX.ckpt` files (top 20 by validation
+     action error) and `latest.ckpt`
+   - `train.log`, `logs.json.txt`: training/validation metrics (also on wandb)
+   - `sparse_normalizer.pkl`, `.hydra/`: normalizer and the full config of the run
+
+   `--ckpt` in step 5 takes a path relative to `$PYRITE_CHECKPOINT_FOLDERS`: a run folder
+   (uses its `checkpoints/latest.ckpt`) or a specific `.ckpt` file.
+
+   **Inference logs.** Each robot run is logged to `$PYRITE_CONTROL_LOG_FOLDERS`
+   (`~/data/inference_log`): `temp_worldframe/` for ACP/RACP and `temp_DP/` for DP, one
+   `<date>_<time>_<checkpoint>/` folder per launch with one `episode_<n>.zarr` per episode.
+   The impedance controller writes its own log, with the measured wrench, to
+   `~/data/controller_log/impedance_controller.log`.
+
+   **Force, trajectory and stiffness plots (ACP/RACP)** with
+   `PyriteEnvSuites/env_runners/plot_logs.py`:
+   1. Copy `~/data/controller_log/impedance_controller.log` into the episode folder
+      (`.../episode_<n>.zarr/`) right after the rollout. Without it the wrench plot is skipped.
+   2. Set `TEST_PATH` at the top of the script to that `episode_<n>.zarr` folder. Optionally set
+      `FLAG_GROUND_TRUTH = True` with `TRAIN_PATH` pointing at a training episode, or
+      `FLAG_COMPARE = True` with `COMPARE_PATH` pointing at another rollout.
+   3. Run it:
+      ```sh
+      python PyriteEnvSuites/env_runners/plot_logs.py
+      ```
+   It plots the predicted stiffness along each axis, the nominal vs virtual target
+   trajectory in 3D, the measured forces/torques and ||F||, and the scalar stiffness (inference,
+   post-blend and, with `FLAG_GROUND_TRUTH`, ground truth).
+
+   **Attention plots (RACP only)** with `PyriteEnvSuites/env_runners/plot_attention.py`:
+   1. Set `VISUALIZE_ATTENTION = True` in `attention_viz.py` (see the warning in step 4).
+   2. Empty or remove `attn_viz/` in the folder you launch inference from (`racp/` with the
+      commands above). Each run numbers its files from 0, so leftovers from a longer earlier
+      run would get mixed in.
+   3. Run inference (step 5). Every control step writes `attn_viz/attn_weights_<n>.pkl`.
+   4. Plot the image vs force attention mass and the wrench magnitude over the rollout:
+      ```sh
+      python PyriteEnvSuites/env_runners/plot_attention.py attn_viz
+      ```
+      It saves `attn_viz/attn_force_correlation.png` and `figs/attention/attention.pdf`
+      (next to `attn_viz/`). Without an argument it reads
+      `PyriteEnvSuites/env_runners/attn_viz/`.
+   5. Set `VISUALIZE_ATTENTION` back to `False` before training again.
 
 See `racp/README.md` for more on the method, data format and training options.
 
 When you change C++ code in `hardware_interfaces` or `controllers`, run `sudo make install` again
+
+## 7. Data format
+
+See [`data/README.md`](data/README.md) for what raw and processed episodes look like, with example
+episodes to download.
 
 ## Credits
 
