@@ -14,26 +14,26 @@ imports `hardware_interfaces` from the folder next to `racp`.
 
 | Folder | What it is | Source |
 |---|---|---|
-| `racp/` | Training, data processing, inference (branch `dev`) | submodule, `mikelasa` fork |
-| `hardware_interfaces/` | `ManipServer`, hardware drivers, `main_teleop` (branch `v1.0`) | submodule, `mikelasa` fork |
-| `controllers/` | Impedance/admittance controllers (branch `mainline`) | submodule, `mikelasa` fork |
+| `racp/` | Training, data processing, inference | this repo |
+| `hardware_interfaces/` | `ManipServer`, hardware drivers, `main_teleop` | this repo |
+| `controllers/` | Impedance/admittance/position controllers | this repo |
+| `libfranka-0.9.2/` | libfranka **0.9.2** (the version the robot uses) | submodule |
 | `cpplibrary/` | RobotUtilities (`RUT`) | submodule |
 | `yaml-cpp/`, `opencv/`, `librealsense/`, `ur_rtde/` | Third-party C++ libraries | submodules |
-| `eigen-3.4.0/` | Eigen 3.4 sources | downloaded |
-| `libfranka-0.9.2/` | libfranka **0.9.2** (the version the robot uses) | cloned separately |
+| `racp/PyriteML/dual-attention-encoder/`, `racp/PyriteML/multimodal_representation/` | Model components | submodules |
+| `eigen-3.4.0/` | Eigen 3.4 sources | downloaded (step 4) |
+
+Submodules are pinned to the exact commits used on the workstation.
 
 All C++ libraries are installed to `~/.local`, so `sudo` is only needed for `apt`.
 
 ## 1. Clone
 
 ```sh
-cd ~
-git clone --recursive --branch master git@github.com:mikelasa/adaptive_compliance_policy.git ACP
-cd ACP
-git -C adaptive_compliance_policy checkout dev
-git -C hardware_interfaces checkout v1.0
-git -C controllers checkout mainline
+git clone --recursive https://github.com/mikelasa/RACP.git ~/RACP
 ```
+
+If you cloned without `--recursive`, run `git submodule update --init --recursive` inside `~/RACP`.
 
 ## 2. System packages and `~/.local`
 
@@ -67,7 +67,7 @@ export PYRITE_CONTROL_LOG_FOLDERS=$HOME/data/inference_log      # inference logs
 ## 3. Python environment (`pyrite`)
 
 Uses [micromamba](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html)
-(`mamba` works the same). `conda_environment.yaml` in the fork already leaves PyTorch out
+(`mamba` works the same). `racp/conda_environment.yaml` already leaves PyTorch out
 and pins `zarr<3` and `numcodecs<0.13`, so no edits are needed.
 
 ```sh
@@ -133,11 +133,10 @@ cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/.local -DPYTHON_EXECUTABLE=$(which python3
 make -j && make install
 ```
 
-### OpenCV 4.12
+### OpenCV
 
 ```sh
-cd ~/RACP/opencv && git checkout 4.12.0
-mkdir -p build && cd build
+cd ~/RACP/opencv && mkdir -p build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/.local \
          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
          -DCMAKE_BUILD_TYPE=Release \
@@ -162,13 +161,11 @@ make -j$(($(nproc)-1)) && make install
 
 ### libfranka 0.9.2
 
-The robot firmware needs **0.9.2**, cloned into its own folder (not the `libfranka` submodule).
+The robot firmware needs **0.9.2**; the submodule is pinned to it.
 `hardware_interfaces` includes headers straight from `libfranka-0.9.2/` next to it.
 
 ```sh
-cd ~/RACP
-git clone --branch 0.9.2 --recursive https://github.com/frankaemika/libfranka libfranka-0.9.2
-cd libfranka-0.9.2 && mkdir -p build && cd build
+cd ~/RACP/libfranka-0.9.2 && mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=ON \
          -DCMAKE_INSTALL_PREFIX=$HOME/.local -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 make -j$(($(nproc)-1)) && make install
@@ -176,7 +173,7 @@ make -j$(($(nproc)-1)) && make install
 
 ### controllers
 
-The fork already includes the `cpplibrary`/`yaml-cpp` include directories in its `CMakeLists.txt`.
+Its `CMakeLists.txt` already includes the `cpplibrary`/`yaml-cpp` include directories.
 
 ```sh
 cd ~/RACP/controllers && mkdir -p build && cd build
@@ -187,7 +184,7 @@ make -j && make install
 
 ## 5. hardware_interfaces
 
-The fork already has the fixes from the upstream repo applied (`TaskSpaceInterpolationController`
+The fixes needed on top of the original code are already applied (`TaskSpaceInterpolationController`
 in `manip_server_loops.cc`, libfranka 0.9.2 include paths in the CMake files).
 
 ```sh
@@ -237,3 +234,16 @@ Activate `pyrite` first. Python commands run from `~/RACP/racp` unless noted.
    ```
 
 See `racp/README.md` for more on the method, data format and training options.
+
+When you change C++ code in `hardware_interfaces` or `controllers`, run `make install` again
+(`sudo make install` if the files in `~/.local` are owned by root): at runtime the libraries are
+loaded from `~/.local/lib`, which `LD_LIBRARY_PATH` puts ahead of `build/`.
+
+## Credits
+
+RACP builds on code by Yifan Hou (Stanford):
+- `racp/` started from [adaptive_compliance_policy](https://github.com/yifan-hou/adaptive_compliance_policy) (MIT, see `racp/LICENSE`).
+- `hardware_interfaces/` started from [hardware_interfaces](https://github.com/yifan-hou/hardware_interfaces).
+- `controllers/` started from [force_control](https://github.com/yifan-hou/force_control) (MIT, see `controllers/LICENSE`).
+
+Their full commit history is kept in this repo.
