@@ -21,7 +21,7 @@ find_library(FRANKA_LIB franka HINTS $ENV{HOME}/.local/lib /usr/local/lib /usr/l
 find_library(YAMLLib yaml-cpp HINTS /usr/local/lib)
 find_library(RUT Utilities HINTS ${CMAKE_INSTALL_PREFIX}/lib/RobotUtilities)
 
-add_library(FORCE_CONTROLLERS SHARED src/admittance_controller.cpp src/config_deserialize.cpp src/impedance_controller.cpp src/config_deserialize_impedance.cpp)
+add_library(FORCE_CONTROLLERS SHARED src/admittance_controller.cpp src/config_deserialize.cpp src/impedance_controller.cpp src/config_deserialize_impedance.cpp src/position_controller.cpp src/config_deserialize_position.cpp)
   target_link_libraries(FORCE_CONTROLLERS ${RUT} ${YAMLLib} ${FRANKA_LIB})
 
 install(DIRECTORY include/
