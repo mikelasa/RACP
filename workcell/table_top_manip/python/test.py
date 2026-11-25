@@ -1,3 +1,4 @@
+import os
 import manip_server_pybind as ms
 import numpy as np
 from time import sleep
@@ -11,7 +12,7 @@ server = ms.ManipServer()
 server.initialize(
     #"/home/yifanhou/git/RobotTestBench/applications/ur_test_bench/config/ur_1.yaml"
     # "/home/yifanhou/git/RobotTestBench/applications/ur_test_bench/config/ur_test_bench.yaml"
-    "/home/robotlab/ACP/hardware_interfaces/workcell/table_top_manip/config/single_arm_data_collection_franka.yaml"
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config/single_arm_data_collection_franka.yaml")
 )
 
 print("[python] server created")

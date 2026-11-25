@@ -17,7 +17,7 @@ run_wrench_thread: True
 run_rgb_thread: True
 run_eoat_thread: false
 eoat_selection: "FRANKA_GRIPPER" # "FRANKA_GRIPPER" or "EOAT"
-teleop: false
+teleop: true
 plot_rgb: false
 plot_wrench: false
 

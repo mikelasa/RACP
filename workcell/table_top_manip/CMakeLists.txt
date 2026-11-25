@@ -22,9 +22,9 @@ include_directories(
   yaml-cpp
   ${EIGEN3_INCLUDE_DIRS}
   ${CMAKE_INSTALL_PREFIX}/include/
-  $ENV{HOME}/ACP/libfranka-0.9.2/src/
-  $ENV{HOME}/ACP/libfranka-0.9.2/include/franka/
-  $ENV{HOME}/ACP/libfranka-0.9.2/common/include/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/src/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/include/franka/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/common/include/
 )
 
 add_library(ManipServer SHARED src/manip_server.cc src/manip_server_loops.cc)

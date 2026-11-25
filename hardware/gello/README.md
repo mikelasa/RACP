@@ -39,7 +39,7 @@ This interface does **not** inherit from `TeleopInterface` because GELLO outputs
 The SDK is bundled as a submodule inside the gello_software repo:
 
 ```bash
-cd ~/ACP/gello_software
+cd ~/RACP/gello_software
 git submodule init
 git submodule update -- third_party/DynamixelSDK
 ```
@@ -47,7 +47,7 @@ git submodule update -- third_party/DynamixelSDK
 ### 2. Build and install the C++ library
 
 ```bash
-cd ~/ACP/gello_software/third_party/DynamixelSDK/c++/build/linux64
+cd ~/RACP/gello_software/third_party/DynamixelSDK/c++/build/linux64
 make
 make install INSTALL_ROOT=$HOME/.local
 ```
@@ -68,7 +68,7 @@ newgrp dialout   # or log out and back in
 The `gello` subdirectory is already registered in the root `CMakeLists.txt`. A normal build picks it up:
 
 ```bash
-cd ~/ACP/hardware_interfaces/build
+cd ~/RACP/hardware_interfaces/build
 cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/.local \
          -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
          -DCMAKE_BUILD_TYPE=Debug \
@@ -114,7 +114,7 @@ struct GelloConfig {
 ```
 
 > **Where to find joint_offsets and joint_signs for your robot:**
-> `~/ACP/gello_software/gello/agents/gello_agent.py` → `PORT_CONFIG_MAP`
+> `~/RACP/gello_software/gello/agents/gello_agent.py` → `PORT_CONFIG_MAP`
 > Each entry is keyed by USB serial port path and contains the calibrated values for that robot.
 
 ### Minimal usage example

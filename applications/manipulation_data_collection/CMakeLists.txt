@@ -9,12 +9,15 @@ include_directories(
   yaml-cpp
   ${Boost_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
-  $ENV{HOME}/ACP/libfranka-0.9.2/src/
-  $ENV{HOME}/ACP/libfranka-0.9.2/include/franka/
-  $ENV{HOME}/ACP/libfranka-0.9.2/common/include/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/src/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/include/franka/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/common/include/
 )
 
 add_executable(main_teleop src/main_teleop.cc)
+target_compile_definitions(main_teleop PRIVATE
+  HI_CONFIG_DIR="${CMAKE_SOURCE_DIR}/workcell/table_top_manip/config"
+)
 target_link_libraries(main_teleop
   ManipServer
   SPACEMOUSE

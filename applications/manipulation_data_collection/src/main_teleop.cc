@@ -36,10 +36,9 @@ int main() {
       - hardware config (robot, camera...)
       -  controller config
   */
+  // HI_CONFIG_DIR is set by CMake to <hardware_interfaces>/workcell/table_top_manip/config
   const std::string config_path =
-      "/home/robotlab/ACP/hardware_interfaces/workcell/"
-      "table_top_manip/"
-      "config/single_arm_data_collection_franka.yaml";
+      std::string(HI_CONFIG_DIR) + "/single_arm_data_collection_franka.yaml";
 
   // create the server, this server handles all the data collection pipeline, communication with hardware, etc...
   ManipServer server(config_path);

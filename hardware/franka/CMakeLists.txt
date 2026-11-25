@@ -1,8 +1,8 @@
 include_directories(
   include/
-  $ENV{HOME}/ACP/libfranka-0.9.2/src/
-  $ENV{HOME}/ACP/libfranka-0.9.2/include/franka/
-  $ENV{HOME}/ACP/libfranka-0.9.2/common/include/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/src/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/include/franka/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/common/include/
   /usr/include/eigen3
 )
 
