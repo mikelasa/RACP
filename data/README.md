@@ -48,14 +48,3 @@ One zarr store per dataset (under `$PYRITE_DATASET_FOLDERS`), about 55 MB per ep
     └── episode_rgb0_len, episode_rgb1_len, episode_robot0_len, episode_wrench0_len
                                         (n_episodes,) samples per episode
 ```
-
-To open an episode in Python (from `~/RACP/racp`; the JPEG-XL codec has to be registered first):
-
-```python
-import zarr
-from PyriteUtility.computer_vision.imagecodecs_numcodecs import register_codecs
-
-register_codecs()
-ep = zarr.open("<dataset>", mode="r")["data/episode_<id>"]
-print(ep["rgb_0"][0].shape, ep["ts_pose_fb_0"][0], ep["stiffness_0"][:3])
-```
