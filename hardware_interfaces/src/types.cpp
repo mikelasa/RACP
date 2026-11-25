@@ -1,0 +1,301 @@
+#include "hardware_interfaces/types.h"
+
+#include <vector>
+
+const std::vector<RobotSafetyMode>& all_safety_modes() {
+  static const std::vector<RobotSafetyMode> modes = {
+      RobotSafetyMode::NONE, RobotSafetyMode::SAFETY_MODE_NONE,
+      RobotSafetyMode::SAFETY_MODE_TRUNCATE, RobotSafetyMode::SAFETY_MODE_STOP};
+  return modes;
+}
+
+const std::vector<RobotOperationMode>& all_operation_modes() {
+  static const std::vector<RobotOperationMode> modes = {
+      RobotOperationMode::NONE, RobotOperationMode::OPERATION_MODE_CARTESIAN,
+      RobotOperationMode::OPERATION_MODE_JOINT};
+  return modes;
+}
+
+const std::vector<ForceSensingMode>& all_force_sensing_modes() {
+  static const std::vector<ForceSensingMode> modes = {
+      ForceSensingMode::NONE, ForceSensingMode::FORCE_MODE_ATI,
+      ForceSensingMode::FORCE_MODE_ROBOTIQ,
+      ForceSensingMode::FORCE_MODE_COINFT,
+      ForceSensingMode::JOINT_SENSORS};
+  return modes;
+}
+
+const std::vector<CameraSelection>& all_camera_selections() {
+  static const std::vector<CameraSelection> modes = {
+      CameraSelection::NONE, CameraSelection::GOPRO,
+      CameraSelection::REALSENSE, CameraSelection::USBCAM};
+  return modes;
+}
+
+const std::vector<RobotSelection>& all_robot_selections() {
+  static const std::vector<RobotSelection> modes = {
+      RobotSelection::UR_RTDE, RobotSelection::FRANKA};
+  return modes;
+}
+
+const std::vector<EoatSelection>& all_eoat_selections() {
+  static const std::vector<EoatSelection> modes = {
+      EoatSelection::NONE, EoatSelection::WSG, EoatSelection::FRANKA_GRIPPER};
+  return modes;
+}
+
+const std::vector<ControllerSelection>& all_controller_selections() {
+  static const std::vector<ControllerSelection> modes = {
+      ControllerSelection::IMPEDANCE_CONTROLLER,
+      ControllerSelection::ADMITTANCE_CONTROLLER,
+      ControllerSelection::POSITION_CONTROLLER};
+  return modes;
+}
+
+const std::vector<TeleopSelection>& all_teleop_selections() {
+  static const std::vector<TeleopSelection> modes = {
+      TeleopSelection::NONE, TeleopSelection::SPACEMOUSE,
+      TeleopSelection::GAMEPAD, TeleopSelection::GELLO};
+  return modes;
+}
+
+const std::vector<RandomType>& all_random_types() {
+  static const std::vector<RandomType> modes = {
+      RandomType::NONE, RandomType::CONSTANT, RandomType::UNIFORM,
+      RandomType::GAUSSIAN};
+  return modes;
+}
+
+template <>
+const char* to_string(const RobotSafetyMode e) {
+  switch (e) {
+    case RobotSafetyMode::NONE:
+      return "NONE";
+    case RobotSafetyMode::SAFETY_MODE_NONE:
+      return "SAFETY_MODE_NONE";
+    case RobotSafetyMode::SAFETY_MODE_TRUNCATE:
+      return "SAFETY_MODE_TRUNCATE";
+    case RobotSafetyMode::SAFETY_MODE_STOP:
+      return "SAFETY_MODE_STOP";
+    default:
+      return "INVALID_ROBOT_SAFETY_MODE";
+  }
+}
+
+template <>
+const char* to_string(const RobotOperationMode e) {
+  switch (e) {
+    case RobotOperationMode::NONE:
+      return "NONE";
+    case RobotOperationMode::OPERATION_MODE_CARTESIAN:
+      return "OPERATION_MODE_CARTESIAN";
+    case RobotOperationMode::OPERATION_MODE_JOINT:
+      return "OPERATION_MODE_JOINT";
+    default:
+      return "INVALID_ROBOT_OPERATION_MODE";
+  }
+}
+
+template <>
+const char* to_string(const ForceSensingMode e) {
+  switch (e) {
+    case ForceSensingMode::NONE:
+      return "NONE";
+    case ForceSensingMode::FORCE_MODE_ATI:
+      return "FORCE_MODE_ATI";
+    case ForceSensingMode::FORCE_MODE_ROBOTIQ:
+      return "FORCE_MODE_ROBOTIQ";
+    case ForceSensingMode::FORCE_MODE_COINFT:
+      return "FORCE_MODE_COINFT";
+    case ForceSensingMode::JOINT_SENSORS:
+      return "JOINT_SENSORS";
+    default:
+      return "INVALID_FORCE_SENSING_MODE";
+  }
+}
+
+template <>
+const char* to_string(const CameraSelection e) {
+  switch (e) {
+    case CameraSelection::NONE:
+      return "NONE";
+    case CameraSelection::GOPRO:
+      return "GOPRO";
+    case CameraSelection::REALSENSE:
+      return "REALSENSE";
+    case CameraSelection::USBCAM:
+      return "USBCAM";
+    default:
+      return "INVALID_CAMERA_SELECTION";
+  }
+}
+
+template <>
+const char* to_string(const RobotSelection e) {
+  switch (e) {
+    case RobotSelection::UR_RTDE:
+      return "UR_RTDE";
+    case RobotSelection::FRANKA:
+      return "FRANKA";
+    default:
+      return "INVALID_ROBOT_SELECTION";
+  }
+}
+
+template <>
+const char* to_string(const EoatSelection e) {
+  switch (e) {
+    case EoatSelection::NONE:
+      return "NONE";
+    case EoatSelection::WSG:
+      return "WSG";
+    case EoatSelection::FRANKA_GRIPPER:
+      return "FRANKA_GRIPPER";
+    default:
+      return "INVALID_EOAT_SELECTION";
+  }
+}
+
+template <>
+const char* to_string(const ControllerSelection e) {
+  switch (e) {
+    case ControllerSelection::IMPEDANCE_CONTROLLER:
+      return "IMPEDANCE_CONTROLLER";
+    case ControllerSelection::ADMITTANCE_CONTROLLER:
+      return "ADMITTANCE_CONTROLLER";
+    case ControllerSelection::POSITION_CONTROLLER:
+      return "POSITION_CONTROLLER";
+    default:
+      return "INVALID_CONTROLLER_SELECTION";
+  }
+}
+
+template <>
+const char* to_string(const TeleopSelection e) {
+  switch (e) {
+    case TeleopSelection::NONE:
+      return "NONE";
+    case TeleopSelection::SPACEMOUSE:
+      return "SPACEMOUSE";
+    case TeleopSelection::GAMEPAD:
+      return "GAMEPAD";
+    case TeleopSelection::GELLO:
+      return "GELLO";
+    default:
+      return "INVALID_TELEOP_SELECTION";
+  }
+}
+
+template <>
+const char* to_string(const RandomType e) {
+  switch (e) {
+    case RandomType::NONE:
+      return "NONE";
+    case RandomType::CONSTANT:
+      return "CONSTANT";
+    case RandomType::UNIFORM:
+      return "UNIFORM";
+    case RandomType::GAUSSIAN:
+      return "GAUSSIAN";
+    default:
+      return "INVALID_RANDOM_TYPE";
+  }
+}
+
+template <>
+RobotSafetyMode string_to_enum(const std::string& string) {
+  for (const auto& mode : all_safety_modes()) {
+    if (string == to_string(mode)) {
+      return mode;
+    }
+  }
+
+  return RobotSafetyMode::NONE;
+}
+
+template <>
+RobotOperationMode string_to_enum(const std::string& string) {
+  for (const auto& mode : all_operation_modes()) {
+    if (string == to_string(mode)) {
+      return mode;
+    }
+  }
+
+  return RobotOperationMode::NONE;
+}
+
+template <>
+ForceSensingMode string_to_enum(const std::string& string) {
+  for (const auto& mode : all_force_sensing_modes()) {
+    if (string == to_string(mode)) {
+      return mode;
+    }
+  }
+
+  return ForceSensingMode::NONE;
+}
+
+template <>
+CameraSelection string_to_enum(const std::string& string) {
+  for (const auto& e : all_camera_selections()) {
+    if (string == to_string(e)) {
+      return e;
+    }
+  }
+
+  return CameraSelection::NONE;
+}
+
+template <>
+RobotSelection string_to_enum(const std::string& string) {
+  for (const auto& e : all_robot_selections()) {
+    if (string == to_string(e)) {
+      return e;
+    }
+  }
+
+  return RobotSelection::FRANKA;
+}
+
+template <>
+EoatSelection string_to_enum(const std::string& string) {
+  for (const auto& e : all_eoat_selections()) {
+    if (string == to_string(e)) {
+      return e;
+    }
+  }
+  return EoatSelection::NONE;
+}
+
+template <>
+ControllerSelection string_to_enum(const std::string& string) {
+  for (const auto& e : all_controller_selections()) {
+    if (string == to_string(e)) {
+      return e;
+    }
+  }
+
+  return ControllerSelection::IMPEDANCE_CONTROLLER;
+}
+
+template <>
+TeleopSelection string_to_enum(const std::string& string) {
+  for (const auto& e : all_teleop_selections()) {
+    if (string == to_string(e)) {
+      return e;
+    }
+  }
+
+  return TeleopSelection::NONE;
+}
+
+template <>
+RandomType string_to_enum(const std::string& string) {
+  for (const auto& type : all_random_types()) {
+    if (string == to_string(type)) {
+      return type;
+    }
+  }
+
+  return RandomType::NONE;
+}

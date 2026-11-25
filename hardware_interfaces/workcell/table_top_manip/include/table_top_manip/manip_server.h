@@ -1,0 +1,477 @@
+#pragma once
+
+#include <unistd.h>
+#include <csignal>
+#include <deque>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <atomic>
+
+#include <yaml-cpp/yaml.h>
+#include <opencv2/opencv.hpp>
+#include <unsupported/Eigen/CXX11/Tensor>
+
+#include <RobotUtilities/spatial_utilities.h>
+#include <RobotUtilities/timer_linux.h>
+
+#include <force_control_impedance/admittance_controller.h>
+#include <force_control_impedance/config_deserialize.h>
+#include <force_control_impedance/impedance_controller.h>
+#include <force_control_impedance/config_deserialize_impedance.h>
+#include <force_control_impedance/position_controller.h>
+#include <force_control_impedance/config_deserialize_position.h>
+#include <hardware_interfaces/js_interfaces.h>
+#include <hardware_interfaces/robot_interfaces.h>
+#include <hardware_interfaces/types.h>
+// hardware used in this app
+#include <ati_netft/ati_netft.h>
+#include <coinft/coin_ft.h>
+#include <gopro/gopro.h>
+#include <usbcam/usbcam.h>
+#include <realsense/realsense.h>
+#include <robotiq_ft_modbus/robotiq_ft_modbus.h>
+#include <ur_rtde/ur_rtde.h>
+#include <franka/franka.h>
+#include <wsg_gripper/wsg_gripper.h>
+#include <franka_gripper/franka_gripper.h>
+#include <spacemouse/spacemouse.h>
+#include <gamepad/gamepad.h>
+#include <gello/gello.h>
+
+#include <RobotUtilities/data_buffer.h>
+
+// Robot log data structure for lock-free logging
+struct RobotLogData {
+  double timestamp_ms;
+  RUT::Vector7d pose_fb;
+  RUT::Vector7d tau_J;
+  RUT::Vector7d q;        // joint positions
+  RUT::Vector7d dq;       // joint velocities
+  RUT::Vector7d ddq;      // joint accelerations
+};
+
+struct GripperPreset {
+  double width{0.0};        // target gripper width in meters
+  double force{0.0};        // N — 0 uses move(), >force_threshold uses grasp()
+  double duration_ms{1000}; // time to reach target from now
+
+  bool deserialize(const YAML::Node& node) {
+    try {
+      width = node["width"].as<double>();
+      force = node["force"].as<double>();
+      if (node["duration_ms"]) duration_ms = node["duration_ms"].as<double>();
+    } catch (const std::exception& e) {
+      std::cerr << "[GripperPreset] Failed to load: " << e.what() << std::endl;
+      return false;
+    }
+    return true;
+  }
+};
+
+struct ManipServerConfig {
+  std::string data_folder{""};
+  bool run_robot_thread{false};
+  bool run_eoat_thread{false};
+  bool run_wrench_thread{false};
+  bool run_rgb_thread{false};
+  int num_cameras{1};
+  bool plot_rgb{false};
+  bool plot_wrench{false};
+  bool teleop{false};
+  int rgb_buffer_size{5};
+  int robot_buffer_size{100};
+  int eoat_buffer_size{100};
+  int wrench_buffer_size{100};
+  bool mock_hardware{false};
+  bool bimanual{false};
+  int joint_sensor_frequency{1000};
+  double wrench_sensor_filter_alpha{0.1};  // EMA pre-filter on raw wrench before haptic use
+  RobotSelection robot_selection{RobotSelection::FRANKA};
+  EoatSelection eoat_selection{EoatSelection::WSG};
+  std::vector<CameraSelection> camera_selection{};  // one entry per camera id
+  ForceSensingMode force_sensing_mode{ForceSensingMode::NONE};
+  ControllerSelection controller_selection{ControllerSelection::IMPEDANCE_CONTROLLER};
+  TeleopSelection teleop_device{TeleopSelection::GAMEPAD};
+  RUT::Matrix6d low_damping{};
+  std::vector<int> output_rgb_hw{};
+  GripperPreset gripper_open_preset{};
+  GripperPreset gripper_close_preset{};
+
+  // force-adaptive stiffness during teleoperation (see force_adaptive_teleop
+  // in the yaml). Adapts only the translational block of the impedance
+  // stiffness/damping, as a function of the measured contact force.
+  bool fat_enabled{false};
+  double fat_k_max{1500.0};
+  double fat_k_min{500.0};
+  double fat_f_low{7.0};
+  double fat_f_high{15.0};
+  double fat_f_safe{20.0};
+  double fat_effective_mass_kg{0.361};
+  double fat_contact_hysteresis_n{1.0};
+  double fat_contact_hold_ms{30.0};
+  double fat_k_recovery_time_s{0.5};
+  double fat_force_direction_filter_alpha{0.05};
+  bool fat_snap_setpoint_on_exit{true};
+
+  bool deserialize(const YAML::Node& node) {
+    try {
+      data_folder = node["data_folder"].as<std::string>();
+      run_robot_thread = node["run_robot_thread"].as<bool>();
+      run_eoat_thread = node["run_eoat_thread"].as<bool>();
+      run_wrench_thread = node["run_wrench_thread"].as<bool>();
+      run_rgb_thread = node["run_rgb_thread"].as<bool>();
+      if (node["num_cameras"]) num_cameras = node["num_cameras"].as<int>();
+      plot_rgb = node["plot_rgb"].as<bool>();
+      if (node["plot_wrench"]) plot_wrench = node["plot_wrench"].as<bool>();
+      if (node["teleop"]) teleop = node["teleop"].as<bool>();
+      rgb_buffer_size = node["rgb_buffer_size"].as<int>();
+      robot_buffer_size = node["robot_buffer_size"].as<int>();
+      eoat_buffer_size = node["eoat_buffer_size"].as<int>();
+      wrench_buffer_size = node["wrench_buffer_size"].as<int>();
+      mock_hardware = node["mock_hardware"].as<bool>();
+      bimanual = node["bimanual"].as<bool>();
+      joint_sensor_frequency = node["joint_sensor_frequency"].as<int>();
+      if (node["wrench_sensor_filter_alpha"])
+        wrench_sensor_filter_alpha = node["wrench_sensor_filter_alpha"].as<double>();
+      robot_selection = string_to_enum<RobotSelection>(
+          node["robot_selection"].as<std::string>());
+      if (node["eoat_selection"])
+        eoat_selection = string_to_enum<EoatSelection>(
+            node["eoat_selection"].as<std::string>());
+      if (node["camera_selection"].IsSequence()) {
+        for (const auto& item : node["camera_selection"])
+          camera_selection.push_back(
+              string_to_enum<CameraSelection>(item.as<std::string>()));
+      } else {
+        camera_selection.push_back(string_to_enum<CameraSelection>(
+            node["camera_selection"].as<std::string>()));
+      }
+      force_sensing_mode = string_to_enum<ForceSensingMode>(
+          node["force_sensing_mode"].as<std::string>());
+      controller_selection = string_to_enum<ControllerSelection>(
+          node["controller_selection"].as<std::string>());
+      teleop_device = string_to_enum<TeleopSelection>(
+          node["teleop_device"].as<std::string>());
+
+      low_damping = RUT::deserialize_vector<RUT::Vector6d>(node["low_damping"])
+                        .asDiagonal();
+      output_rgb_hw = node["output_rgb_hw"].as<std::vector<int>>();
+      if (node["gripper_open_preset"])
+        gripper_open_preset.deserialize(node["gripper_open_preset"]);
+      if (node["gripper_close_preset"])
+        gripper_close_preset.deserialize(node["gripper_close_preset"]);
+      if (node["force_adaptive_teleop"]) {
+        const auto& fat = node["force_adaptive_teleop"];
+        if (fat["enabled"]) fat_enabled = fat["enabled"].as<bool>();
+        if (fat["k_max"]) fat_k_max = fat["k_max"].as<double>();
+        if (fat["k_min"]) fat_k_min = fat["k_min"].as<double>();
+        if (fat["f_low"]) fat_f_low = fat["f_low"].as<double>();
+        if (fat["f_high"]) fat_f_high = fat["f_high"].as<double>();
+        if (fat["f_safe"]) fat_f_safe = fat["f_safe"].as<double>();
+        if (fat["effective_mass_kg"])
+          fat_effective_mass_kg = fat["effective_mass_kg"].as<double>();
+        if (fat["contact_hysteresis_n"])
+          fat_contact_hysteresis_n = fat["contact_hysteresis_n"].as<double>();
+        if (fat["contact_hold_ms"])
+          fat_contact_hold_ms = fat["contact_hold_ms"].as<double>();
+        if (fat["k_recovery_time_s"])
+          fat_k_recovery_time_s = fat["k_recovery_time_s"].as<double>();
+        if (fat["force_direction_filter_alpha"])
+          fat_force_direction_filter_alpha =
+              fat["force_direction_filter_alpha"].as<double>();
+        if (fat["snap_setpoint_on_exit"])
+          fat_snap_setpoint_on_exit = fat["snap_setpoint_on_exit"].as<bool>();
+
+        if (fat_f_high <= fat_f_low) {
+          std::cerr << "[ManipServer] force_adaptive_teleop: f_high must be "
+                       "greater than f_low. Disabling the layer.\n";
+          fat_enabled = false;
+        }
+        if (fat_k_min <= 0.0 || fat_k_max < fat_k_min) {
+          std::cerr << "[ManipServer] force_adaptive_teleop: need "
+                       "0 < k_min <= k_max. Disabling the layer.\n";
+          fat_enabled = false;
+        }
+        if (fat_effective_mass_kg <= 0.0) {
+          std::cerr << "[ManipServer] force_adaptive_teleop: effective_mass_kg "
+                       "must be positive. Disabling the layer.\n";
+          fat_enabled = false;
+        }
+      }
+
+    } catch (const std::exception& e) {
+      std::cerr << "Failed to load the config file: " << e.what() << std::endl;
+      return false;
+    }
+    return true;
+  }
+};
+
+/// @brief ManipServer class
+/// This class is the main interface to the hardware. It initializes the hardware
+/// interfaces, starts the threads to collect data, and provides the most recent
+/// data points to the user.
+/// Usage:
+///   ManipServer server;
+///   server.initialize("config.yaml");
+///   // wait until the server is ready
+///   while (!server.is_ready()) {
+///     usleep(1000);
+///   }
+///   while (server.is_running()) {
+///     Eigen::MatrixXd camera_rgb = server.get_camera_rgb(5); // get the most recent 5 data points
+///     Eigen::MatrixXd pose = server.get_pose(5);
+///     Eigen::MatrixXd wrench = server.get_wrench(5);
+///     // get the timestamps of the most recently fetched data points
+///     Eigen::VectorXd camera_rgb_timestamps = server.get_camera_rgb_timestamps_ms();
+///     Eigen::VectorXd pose_timestamps = server.get_pose_timestamps_ms();
+///     Eigen::VectorXd wrench_timestamps = server.get_wrench_timestamps_ms();
+///     // do something with the data
+///   }
+///   server.join_threads();
+class ManipServer {
+ public:
+  ManipServer() {};
+  ManipServer(const std::string&);
+  ~ManipServer();
+
+  bool initialize(const std::string& config_file);
+  void join_threads();
+  bool is_ready();  // check if all buffers are full
+  bool is_running();
+  bool is_bimanual() { return _config.bimanual; }
+  /// @brief Which controller this server was configured with, as the same
+  /// string the yaml uses. Lets the Python side skip calls that are
+  /// meaningless for the active controller (e.g. stiffness under
+  /// POSITION_CONTROLLER) instead of relying on a warning.
+  std::string get_controller_selection() {
+    return to_string(_config.controller_selection);
+  }
+
+  // getters: get the most recent k data points in the buffer
+  const Eigen::MatrixXd get_camera_rgb(int k, int camera_id = 0);
+  const Eigen::MatrixXd get_wrench(int k, int sensor_id = 0);
+  const Eigen::MatrixXd get_robot_wrench(int k, int robot_id = 0);
+  const Eigen::MatrixXd get_pose(int k, int robot_id = 0);
+  const Eigen::MatrixXd get_vel(int k, int robot_id = 0);
+  const int get_test();
+  const Eigen::MatrixXd get_eoat(int k, int robot_id = 0);
+
+  // the following functions return the timestamps of
+  //  the most recent getter call of the corresponding feedback
+  //  So size is already know
+  const Eigen::VectorXd get_camera_rgb_timestamps_ms(int id = 0);
+  const Eigen::VectorXd get_wrench_timestamps_ms(int id = 0);
+  const Eigen::VectorXd get_robot_wrench_timestamps_ms(int id = 0);
+  const Eigen::VectorXd get_pose_timestamps_ms(int id = 0);
+  const Eigen::VectorXd get_vel_timestamps_ms(int id = 0);
+  const double get_test_timestamp_ms();
+  const Eigen::VectorXd get_eoat_timestamps_ms(int id = 0);
+
+  double get_timestamp_now_ms();  // access the current hardware time
+
+  void set_high_level_maintain_position();
+  void set_high_level_free_jogging();
+
+  void set_target_pose(const Eigen::Ref<RUT::Vector7d> pose,
+                       double dt_in_future_ms = 1000, int robot_id = 0);
+  void set_force_controlled_axis(const RUT::Matrix6d& Tr, int n_af,
+                                 int robot_id = 0);
+  void set_stiffness_matrix(const RUT::Matrix6d& stiffness, int robot_id = 0);
+
+  void schedule_waypoints(const Eigen::MatrixXd& waypoints,
+                          const Eigen::VectorXd& timepoints_ms,
+                          int robot_id = 0);
+  void schedule_eoat_waypoints(const Eigen::MatrixXd& waypoints,
+                               const Eigen::VectorXd& timepoints_ms,
+                               int robot_id = 0);
+  void schedule_stiffness(const Eigen::MatrixXd& stiffness,
+                          const Eigen::VectorXd& timepoints_ms,
+                          int robot_id = 0);
+
+  void clear_cmd_buffer();
+
+  // data logging
+  void start_saving_data_for_a_new_episode();
+  void stop_saving_data();
+  bool is_saving_data();
+
+ private:
+  // config
+  ManipServerConfig _config;
+
+  // additional configs as local variables
+  std::vector<RUT::Matrix6d> _stiffnesses_high{};
+  std::vector<RUT::Matrix6d> _stiffnesses_low{};
+  std::vector<RUT::Matrix6d> _dampings_high{};
+  std::vector<RUT::Matrix6d> _dampings_low{};
+
+  // list of id
+  std::vector<int> _id_list;         // one entry per robot arm
+  std::vector<int> _camera_id_list;  // one entry per camera (independent of robots)
+
+  // data buffers
+  std::vector<RUT::DataBuffer<Eigen::MatrixXd>> _camera_rgb_buffers;
+  std::vector<RUT::DataBuffer<Eigen::VectorXd>> _pose_buffers;
+  std::vector<RUT::DataBuffer<Eigen::VectorXd>> _vel_buffers;
+  std::vector<RUT::DataBuffer<Eigen::VectorXd>> _eoat_buffers;
+  std::vector<RUT::DataBuffer<Eigen::VectorXd>>
+      _wrench_buffers;  // wrench from external sensors
+  std::vector<RUT::DataBuffer<Eigen::VectorXd>>
+      _robot_wrench_buffers;  // wrench from the robot itself
+  // data buffer mutexes
+  std::deque<std::mutex> _camera_rgb_buffer_mtxs;
+  std::deque<std::mutex> _pose_buffer_mtxs;
+  std::deque<std::mutex> _vel_buffer_mtxs;
+  std::deque<std::mutex> _eoat_buffer_mtxs;
+  std::deque<std::mutex> _wrench_buffer_mtxs;
+  std::deque<std::mutex> _robot_wrench_buffer_mtxs;
+  // data buffer timestamps
+  std::vector<RUT::DataBuffer<double>> _camera_rgb_timestamp_ms_buffers;
+  std::vector<RUT::DataBuffer<double>> _pose_timestamp_ms_buffers;
+  std::vector<RUT::DataBuffer<double>> _vel_timestamp_ms_buffers;
+  std::vector<RUT::DataBuffer<double>> _eoat_timestamp_ms_buffers;
+  std::vector<RUT::DataBuffer<double>> _wrench_timestamp_ms_buffers;
+  std::vector<RUT::DataBuffer<double>> _robot_wrench_timestamp_ms_buffers;
+  // data buffer timestamps just being fetched
+  std::vector<Eigen::VectorXd> _camera_rgb_timestamps_ms;
+  std::vector<Eigen::VectorXd> _pose_timestamps_ms;
+  std::vector<Eigen::VectorXd> _vel_timestamps_ms;
+  std::vector<Eigen::VectorXd> _eoat_timestamps_ms;
+  std::vector<Eigen::VectorXd> _wrench_timestamps_ms;
+  std::vector<Eigen::VectorXd> _robot_wrench_timestamps_ms;
+
+  // action buffers
+  std::vector<RUT::DataBuffer<Eigen::VectorXd>> _eoat_waypoints_buffers;
+  std::vector<RUT::DataBuffer<Eigen::VectorXd>> _waypoints_buffers;
+  std::vector<RUT::DataBuffer<Eigen::MatrixXd>> _stiffness_buffers;
+  // action buffer mutexes
+  std::deque<std::mutex> _waypoints_buffer_mtxs;
+  std::deque<std::mutex> _eoat_waypoints_buffer_mtxs;
+  std::deque<std::mutex> _stiffness_buffer_mtxs;
+  // action buffer timestamps
+  std::vector<RUT::DataBuffer<double>> _waypoints_timestamp_ms_buffers;
+  std::vector<RUT::DataBuffer<double>> _eoat_waypoints_timestamp_ms_buffers;
+  std::vector<RUT::DataBuffer<double>> _stiffness_timestamp_ms_buffers;
+  double _test_timestamp_ms;
+
+  // timing
+  RUT::Timer _timer;
+
+  //  hardware interfaces
+  std::vector<std::shared_ptr<CameraInterfaces>> camera_ptrs;
+  std::vector<std::shared_ptr<FTInterfaces>> force_sensor_ptrs;
+  std::vector<std::shared_ptr<RobotInterfaces>> robot_ptrs;
+  std::vector<std::shared_ptr<JSInterfaces>> eoat_ptrs;
+  std::vector<std::shared_ptr<SpaceMouse>> spacemouse_ptrs;
+  std::vector<std::shared_ptr<Gamepad>> gamepad_ptrs;
+  std::vector<std::shared_ptr<GelloInterface>> gello_ptrs;
+  // Teleoperation scaling per robot id (from YAML spacemouse{id})
+  std::vector<double> _teleop_translation_scales;
+  std::vector<double> _teleop_rotation_scales;
+  std::vector<double> _teleop_input_filter_alphas;
+  std::vector<double> _gello_lp_alphas;
+  std::vector<double> _gello_align_thresholds;
+  std::vector<std::vector<double>> _gello_home_joints;
+  // Franka model + kinematics shared between robot_impedance_loop and gello_teleop_loop
+  std::vector<std::shared_ptr<franka::Model>> _franka_models;
+  std::deque<std::mutex> _franka_model_mtxs;
+  std::vector<bool> _franka_model_ready;
+  std::vector<std::array<double, 16>> _franka_F_T_EE;
+  std::vector<std::array<double, 16>> _franka_EE_T_K;
+
+  // controllers
+  std::vector<AdmittanceController> _admittance_controllers;
+  std::vector<ImpedanceController> _impedance_controllers;
+  std::vector<PositionController> _position_controllers;
+  std::deque<std::mutex> _controller_mtxs;
+
+  // threads
+  std::vector<std::thread> _robot_threads;
+  std::vector<std::thread> _eoat_threads;
+  std::vector<std::thread> _wrench_threads;
+  std::vector<std::thread> _rgb_threads;
+  std::vector<std::thread> _teleop_threads;
+  std::thread _rgb_plot_thread;
+
+  // control variables to control the threads
+  std::vector<std::string> _ctrl_rgb_folders;
+  std::vector<std::ofstream> _ctrl_robot_data_streams;
+  std::vector<std::ofstream> _ctrl_eoat_data_streams;
+  std::vector<std::ofstream> _ctrl_wrench_data_streams;
+  std::vector<std::ofstream> _ctrl_torque_data_streams;
+  std::vector<std::ofstream> _ctrl_joint_data_streams;
+  bool _ctrl_flag_running = false;  // flag to terminate the program
+  bool _ctrl_flag_saving = false;   // flag for ongoing data collection
+  std::mutex _ctrl_mtx;
+
+  // logging buffers for lock-free logging
+  std::vector<RUT::DataBuffer<RobotLogData>> _logging_buffers;
+  std::deque<std::mutex> _logging_buffer_mtxs;
+  std::deque<std::atomic<bool>> _logging_buffer_overflow;
+  std::vector<bool> _states_logging_thread_ready{};
+
+  // state variable indicating the status of the threads
+  std::vector<bool> _states_robot_thread_ready{};
+  std::vector<bool> _states_eoat_thread_ready{};
+  std::vector<bool> _states_rgb_thread_ready{};
+  std::vector<bool> _states_wrench_thread_ready{};
+  bool _state_plot_thread_ready{false};
+
+  // Written by each worker thread, polled by is_saving_data() from the main
+  // thread. std::vector<bool> is bit-packed, so two threads writing different
+  // indices were read-modify-writing the same word: one could resurrect the
+  // other's cleared flag. Atomics, as _logging_buffer_overflow already does.
+  std::deque<std::atomic<bool>> _states_robot_thread_saving{};
+  std::deque<std::atomic<bool>> _states_eoat_thread_saving{};
+  std::deque<std::atomic<bool>> _states_rgb_thread_saving{};
+  std::deque<std::atomic<bool>> _states_wrench_thread_saving{};
+
+  std::vector<int> _states_robot_seq_id{};
+  std::vector<int> _states_eoat_seq_id{};
+  std::vector<int> _states_rgb_seq_id{};
+  std::vector<int> _states_wrench_seq_id{};
+
+  // shared variables between camera thread and plot thread
+  std::vector<cv::Mat> _color_mats;
+  std::deque<std::mutex> _color_mat_mtxs;
+
+  // shared variables between robot thread and wrench thread
+  std::vector<Eigen::VectorXd> _poses_fb;
+  std::deque<std::mutex> _poses_fb_mtxs;
+
+  // shared variables between eoat thread and wrench thread
+  std::vector<Eigen::VectorXd> _wrench_fb;
+  std::deque<std::mutex> _wrench_fb_mtxs;
+
+  // shared variables between teleop thread and robot thread:
+  // force-adaptive compliance. teleop_loop recomputes the pair every cycle and
+  // robot_impedance_loop applies the latest one. This bypasses the stiffness
+  // schedule buffer (which carries no damping) and set_stiffness_matrix()
+  // (which contends on _controller_mtxs, held by the RT loop every cycle).
+  std::vector<RUT::Matrix6d> _teleop_stiffness;
+  std::vector<RUT::Matrix6d> _teleop_damping;
+  std::vector<bool> _teleop_compliance_valid;
+  std::deque<std::mutex> _teleop_compliance_mtxs;
+  // scalar mirror of the above, for the plot thread: k along the contact
+  // normal (the eigenvalue the schedule actually moves) and the FSM state.
+  std::vector<double> _teleop_k_low;
+  std::vector<bool> _teleop_in_contact;
+
+  // loop functions
+  void robot_admittance_loop(const RUT::TimePoint& time0, int robot_id);
+  void robot_impedance_loop(const RUT::TimePoint& time0, int robot_id);
+  void robot_position_loop(const RUT::TimePoint& time0, int robot_id);
+  void robot_logging_loop(const RUT::TimePoint& time0, int robot_id);
+  void eoat_loop(const RUT::TimePoint& time0, int robot_id);
+  void teleop_loop(const RUT::TimePoint& time0, int robot_id);
+  void gello_teleop_loop(const RUT::TimePoint& time0, int robot_id);
+  void rgb_loop(const RUT::TimePoint& time0, int camera_id);
+  void ext_sensor_wrench_loop(const RUT::TimePoint& time0, int publish_rate,
+                   int sensor_id);
+  void joint_sensor_wrench_loop(const RUT::TimePoint& time0, int publish_rate,
+                    int sensor_id);
+  void rgb_plot_loop();  // opencv plotting does not support multi-threading
+};

@@ -1,0 +1,94 @@
+cmake_minimum_required(VERSION 3.5)
+#######################
+project(hardware_interfaces)
+
+include_directories(
+  include/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/src/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/include/franka/
+  ${CMAKE_SOURCE_DIR}/../libfranka-0.9.2/common/include/
+  /usr/include/eigen3
+  $ENV{HOME}/.local/include
+  ${CMAKE_INSTALL_PREFIX}/include
+)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED On)
+set(CMAKE_CXX_EXTENSIONS Off)
+
+find_package(Eigen3 3.4 REQUIRED)
+find_package(pybind11 REQUIRED)
+find_package(Boost REQUIRED COMPONENTS
+  system
+  thread
+  program_options
+)
+find_library(YAMLLib yaml-cpp HINTS /usr/local/lib)
+find_library(RUT Utilities HINTS ${CMAKE_INSTALL_PREFIX}/lib/RobotUtilities)
+find_library(FORCE_CONTROLLERS FORCE_CONTROLLERS HINTS ${CMAKE_INSTALL_PREFIX}/lib/)
+find_library(HIDAPI_LIBRARIES hidapi HINTS /usr/lib /usr/local/lib)
+find_path(HIDAPI_INCLUDE_DIRS hidapi.h HINTS /usr/include /usr/local/include)
+
+include_directories(
+  include/
+  ${EIGEN3_INCLUDE_DIRS}
+)
+add_library(HI_COMMON SHARED
+  src/types.cpp
+)
+
+# hardware to build
+add_subdirectory(hardware/ati_netft)
+add_subdirectory(hardware/coinft)
+add_subdirectory(hardware/realsense)
+add_subdirectory(hardware/gopro)
+add_subdirectory(hardware/robotiq_ft_modbus)
+add_subdirectory(hardware/ur_rtde)
+add_subdirectory(hardware/wsg_gripper)
+add_subdirectory(hardware/franka)
+add_subdirectory(hardware/franka_gripper)
+add_subdirectory(hardware/spacemouse)
+add_subdirectory(hardware/gamepad)
+add_subdirectory(hardware/gello)
+add_subdirectory(hardware/usbcam)
+
+# workcell to build
+# include every "include" directory under /hardware/*
+file(GLOB HARDWARE_INCLUDE_DIRS "hardware/*/include")
+include_directories(${HARDWARE_INCLUDE_DIRS})
+add_subdirectory(workcell/table_top_manip)
+
+# Application to build
+file(GLOB WORKCELL_INCLUDE_DIRS "workcell/*/include")
+include_directories(${WORKCELL_INCLUDE_DIRS})
+add_subdirectory(applications/manipulation_data_collection)
+
+# install common
+install(DIRECTORY include/
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/include/
+)
+install(TARGETS HI_COMMON
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/
+)
+
+# Test executable
+find_package(fmt REQUIRED)
+find_package(spdlog REQUIRED)
+add_executable(test_hardware_interfaces
+  test/main.cc
+)
+target_include_directories(test_hardware_interfaces PRIVATE
+  hardware/ati_netft/include/
+  hardware/realsense/include/
+  hardware/ur_rtde/include/
+  hardware/robotiq_ft_modbus/include/
+)
+
+target_link_libraries(test_hardware_interfaces
+  ${Boost_LIBRARIES}
+  ${RUT}
+  WSG_GRIPPER
+  COIN_FT
+  # spdlog::spdlog
+)
+
