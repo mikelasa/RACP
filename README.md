@@ -232,10 +232,6 @@ Robot configs live in `workcell/table_top_manip/config/`:
 
    **Trained models.** Each training run creates a folder in `$PYRITE_CHECKPOINT_FOLDERS`
    (`~/training_outputs`) named `<date>_<time>_<task>_<name>` (`..._multirun/<n>_...` for sweeps):
-   - `checkpoints/`: the best `epoch=XXXX-train_loss=X.XXX.ckpt` files (top 20 by validation
-     action error) and `latest.ckpt`
-   - `train.log`, `logs.json.txt`: training/validation metrics (also on wandb)
-   - `sparse_normalizer.pkl`, `.hydra/`: normalizer and the full config of the run
 
    `--ckpt` in step 5 takes a path relative to `$PYRITE_CHECKPOINT_FOLDERS`: a run folder
    (uses its `checkpoints/latest.ckpt`) or a specific `.ckpt` file.
@@ -248,8 +244,6 @@ Robot configs live in `workcell/table_top_manip/config/`:
 
    **Force, trajectory and stiffness plots (ACP/RACP)** with
    `PyriteEnvSuites/env_runners/plot_logs.py`:
-   1. Copy `~/data/controller_log/impedance_controller.log` into the episode folder
-      (`.../episode_<n>.zarr/`) right after the rollout. Without it the wrench plot is skipped.
    2. Set `TEST_PATH` at the top of the script to that `episode_<n>.zarr` folder. Optionally set
       `FLAG_GROUND_TRUTH = True` with `TRAIN_PATH` pointing at a training episode, or
       `FLAG_COMPARE = True` with `COMPARE_PATH` pointing at another rollout.
